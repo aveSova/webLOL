@@ -1,6 +1,6 @@
 // config.js (ES modules version)
 const config = {
-    port: 3000,
+    port: 8080,
     db: {
         host: 'localhost',
         user: 'root',
