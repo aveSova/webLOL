@@ -4,11 +4,11 @@ import url from 'url';
 import mysql from 'mysql2/promise';
 
 const config = {
-    port: 3000,
+    port: 58528,
     db: {
-        host: 'localhost',
-        user: 'root',
-        password: '13577531admin',  // ваш пароль
+        host: 'kubsu-dev.ru',
+        user: 'u82303',
+        password: '6795529',  // ваш пароль
         database: 'form_db',
         port: 3306
     }
