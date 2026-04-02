@@ -9,7 +9,7 @@ const config = {
     db: {
         host: process.env.DB_HOST || 'localhost',
         user: process.env.DB_USER || 'u82303',
-        password: process.env.DB_PASSWORD || 'ваш_пароль',
+        password: process.env.DB_PASSWORD || '6795529',
         database: process.env.DB_NAME || 'u82303',
         port: 3306
     }
