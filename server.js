@@ -9,7 +9,7 @@ const config = {
         host: 'kubsu-dev.ru',
         user: 'u82303',
         password: '6795529',  // ваш пароль
-        database: 'form_db',
+        database: 'u82303',
         port: 3306
     }
 };
