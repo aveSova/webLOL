@@ -1,9 +1,8 @@
-// server.js
 import http from 'http';
 import url from 'url';
 import mysql from 'mysql2/promise';
 
-// Конфигурация через переменные окружения (для Render)
+// Конфигурация
 const config = {
     port: process.env.PORT || 3000,
     db: {
@@ -16,7 +15,6 @@ const config = {
 };
 
 const server = http.createServer(async (req, res) => {
-    // CORS для вашего фронтенда на kubsu-dev.ru
     res.setHeader('Access-Control-Allow-Origin', '*');
     res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
     res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
@@ -29,7 +27,7 @@ const server = http.createServer(async (req, res) => {
     
     const parsedUrl = url.parse(req.url || '', true);
     
-    // Обработка сохранения формы
+    // Сохранение
     if (parsedUrl.pathname === '/save' && req.method === 'POST') {
         let body = '';
         
@@ -54,10 +52,8 @@ const server = http.createServer(async (req, res) => {
                 
                 console.log('📨 Получены данные:', formData.full_name, formData.email);
                 
-                // Подключение к БД
                 const connection = await mysql.createConnection(config.db);
                 
-                // Создаём таблицу, если её нет
                 await connection.execute(`
                     CREATE TABLE IF NOT EXISTS form_submissions (
                         id INT AUTO_INCREMENT PRIMARY KEY,
@@ -73,7 +69,6 @@ const server = http.createServer(async (req, res) => {
                     )
                 `);
                 
-                // Вставляем данные
                 const sql = `
                     INSERT INTO form_submissions 
                     (full_name, phone, email, birth_date, gender, programming_languages, biography, contract_accepted)
