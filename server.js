@@ -2,10 +2,52 @@
 import http from 'http';
 import url from 'url';
 import pg from 'pg';
+import cookie from 'cookie';
 
 const { Pool } = pg;
 
-// Конфигурация через переменные окружения
+function validateForm(data) {
+    const errors = {};
+    
+    if (!data.full_name || !/^[А-Яа-яA-Za-z\s\-]{2,100}$/.test(data.full_name)) {
+        errors.full_name = 'ФИО: только буквы, пробелы и дефис (2-100 символов)';
+    }
+
+    if (!data.phone || !/^[\+\d\s\-\(\)]{10,20}$/.test(data.phone)) {
+        errors.phone = 'Телефон: формат +7 (999) 123-45-67';
+    }
+
+    if (!data.email || !/^[^\s@]+@([^\s@]+\.)+[^\s@]+$/.test(data.email)) {
+        errors.email = 'Email: введите корректный адрес';
+    }
+
+    if (!data.birth_date || !/^\d{4}-\d{2}-\d{2}$/.test(data.birth_date)) {
+        errors.birth_date = 'Дата рождения: формат ГГГГ-ММ-ДД';
+    }
+
+    if (!data.gender || !['male', 'female', 'other'].includes(data.gender)) {
+        errors.gender = 'Выберите пол';
+    }
+
+    let languages = data.languages;
+    if (typeof languages === 'string') {
+        languages = languages.split(',');
+    }
+    if (!languages || languages.length === 0 || (languages.length === 1 && !languages[0])) {
+        errors.languages = 'Выберите хотя бы один язык программирования';
+    }
+
+    if (!data.biography || data.biography.length < 10) {
+        errors.biography = 'Расскажите о себе (минимум 10 символов)';
+    }
+    
+    if (!data.contract_accepted || data.contract_accepted !== '1') {
+        errors.contract_accepted = 'Необходимо согласие с контрактом';
+    }
+    
+    return errors;
+}
+
 const config = {
     port: process.env.PORT || 3000,
     db: {
@@ -13,16 +55,14 @@ const config = {
     }
 };
 
-// Создаём пул соединений
 const pool = new Pool({
     connectionString: config.db.connectionString,
-    ssl: {
-        rejectUnauthorized: false
-    }
+    ssl: { rejectUnauthorized: false }
 });
 
 const server = http.createServer(async (req, res) => {
-    // CORS для вашего фронтенда
+    const cookies = cookie.parse(req.headers.cookie || '');
+
     res.setHeader('Access-Control-Allow-Origin', '*');
     res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
     res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
@@ -35,14 +75,19 @@ const server = http.createServer(async (req, res) => {
     
     const parsedUrl = url.parse(req.url || '', true);
     
-    // Health check
     if (parsedUrl.pathname === '/health' && req.method === 'GET') {
         res.writeHead(200, { 'Content-Type': 'application/json' });
         res.end(JSON.stringify({ status: 'ok', timestamp: new Date().toISOString() }));
         return;
     }
     
-    // Обработка сохранения формы
+    if (parsedUrl.pathname === '/get-saved-data' && req.method === 'GET') {
+        const savedData = cookies.saved_data ? JSON.parse(cookies.saved_data) : {};
+        res.writeHead(200, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify(savedData));
+        return;
+    }
+    
     if (parsedUrl.pathname === '/save' && req.method === 'POST') {
         let body = '';
         
@@ -55,22 +100,34 @@ const server = http.createServer(async (req, res) => {
             try {
                 const params = new URLSearchParams(body);
                 
+                const languages = params.getAll('languages');
+                
                 const formData = {
                     full_name: params.get('full_name') || '',
                     phone: params.get('phone') || '',
                     email: params.get('email') || '',
-                    birth_date: params.get('birth_date') || null,
+                    birth_date: params.get('birth_date') || '',
                     gender: params.get('gender') || '',
-                    languages: params.get('languages') || '',
+                    languages: languages,
                     biography: params.get('biography') || '',
-                    contract_accepted: params.get('contract_accepted') === '1' ? 1 : 0
+                    contract_accepted: params.get('contract_accepted') || '0'
                 };
                 
-                console.log('📨 Получены данные:', formData.full_name, formData.email);
+                console.log('📨 Получены данные от React:', formData.full_name, formData.email);
+                
+                const errors = validateForm(formData);
+                
+                if (Object.keys(errors).length > 0) {
+                    res.writeHead(400, { 'Content-Type': 'application/json' });
+                    res.end(JSON.stringify({ 
+                        success: false, 
+                        errors: errors 
+                    }));
+                    return;
+                }
                 
                 client = await pool.connect();
                 
-                // Создаём таблицу, если её нет
                 await client.query(`
                     CREATE TABLE IF NOT EXISTS form_submissions (
                         id SERIAL PRIMARY KEY,
@@ -86,7 +143,8 @@ const server = http.createServer(async (req, res) => {
                     )
                 `);
                 
-                // Вставляем данные
+                const languagesStr = Array.isArray(formData.languages) ? formData.languages.join(',') : '';
+                
                 const sql = `
                     INSERT INTO form_submissions 
                     (full_name, phone, email, birth_date, gender, programming_languages, biography, contract_accepted)
@@ -98,14 +156,19 @@ const server = http.createServer(async (req, res) => {
                     formData.full_name,
                     formData.phone,
                     formData.email,
-                    formData.birth_date,
+                    formData.birth_date || null,
                     formData.gender,
-                    formData.languages,
+                    languagesStr,
                     formData.biography,
-                    formData.contract_accepted
+                    formData.contract_accepted === '1' ? 1 : 0
                 ]);
                 
-                console.log('✅ Данные сохранены, ID:', result.rows[0].id);
+                // Сохраняем данные в cookies на год
+                res.setHeader('Set-Cookie', [
+                    `saved_data=${JSON.stringify(formData)}; Max-Age=${365*24*3600}; Path=/; HttpOnly`
+                ]);
+                
+                console.log('✅ Данные сохранены в БД, ID:', result.rows[0].id);
                 
                 res.writeHead(200, { 'Content-Type': 'application/json' });
                 res.end(JSON.stringify({ 
@@ -119,15 +182,16 @@ const server = http.createServer(async (req, res) => {
                 res.writeHead(500, { 'Content-Type': 'application/json' });
                 res.end(JSON.stringify({ 
                     success: false, 
-                    message: error.message 
+                    message: 'Ошибка сервера: ' + error.message 
                 }));
             } finally {
                 if (client) client.release();
             }
         });
+        return;
     }
-    // Просмотр сохранённых анкет
-    else if (parsedUrl.pathname === '/view' && req.method === 'GET') {
+    
+    if (parsedUrl.pathname === '/view' && req.method === 'GET') {
         let client;
         try {
             client = await pool.connect();
@@ -138,93 +202,26 @@ const server = http.createServer(async (req, res) => {
                 LIMIT 100
             `);
             
-            let html = `
-                <!DOCTYPE html>
-                <html>
-                <head>
-                    <meta charset="UTF-8">
-                    <title>Сохранённые анкеты</title>
-                    <style>
-                        body { font-family: Arial, sans-serif; margin: 20px; background: #1c1c1c; color: #ddd; }
-                        table { border-collapse: collapse; width: 100%; margin-top: 20px; }
-                        th, td { border: 1px solid #555; padding: 8px; text-align: left; }
-                        th { background: #333; }
-                        a { color: #ddd; text-decoration: none; }
-                        a:hover { text-decoration: underline; }
-                        h1 { text-align: center; }
-                    </style>
-                </head>
-                <body>
-                    <h1>Сохранённые анкеты</h1>
-                    <div style="text-align: center; margin-bottom: 20px;">
-                        <a href="http://u82303.kubsu-dev.ru">← Вернуться к форме</a>
-                    </div>
-                    <table>
-                        <thead>
-                            <tr>
-                                <th>ID</th>
-                                <th>ФИО</th>
-                                <th>Email</th>
-                                <th>Телефон</th>
-                                <th>Дата рождения</th>
-                                <th>Пол</th>
-                                <th>Языки</th>
-                                <th>Создано</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-            `;
-            
-            for (const row of result.rows) {
-                html += `
-                    <tr>
-                        <td>${row.id}</td>
-                        <td>${escapeHtml(row.full_name)}</td>
-                        <td>${escapeHtml(row.email)}</td>
-                        <td>${escapeHtml(row.phone)}</td>
-                        <td>${row.birth_date || ''}</td>
-                        <td>${escapeHtml(row.gender)}</td>
-                        <td>${escapeHtml(row.programming_languages)}</td>
-                        <td>${new Date(row.created_at).toLocaleString()}</td>
-                    </tr>
-                `;
-            }
-            
-            html += `
-                        </tbody>
-                    </table>
-                </body>
-                </html>
-            `;
-            
-            res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' });
-            res.end(html);
+            res.writeHead(200, { 'Content-Type': 'application/json' });
+            res.end(JSON.stringify(result.rows));
             
         } catch (error) {
             console.error('❌ Ошибка:', error.message);
-            res.writeHead(500, { 'Content-Type': 'text/plain' });
-            res.end('Error: ' + error.message);
+            res.writeHead(500, { 'Content-Type': 'application/json' });
+            res.end(JSON.stringify({ error: error.message }));
         } finally {
             if (client) client.release();
         }
+        return;
     }
-    else {
-        res.writeHead(404, { 'Content-Type': 'application/json' });
-        res.end(JSON.stringify({ error: 'Not found' }));
-    }
+    
+    res.writeHead(404, { 'Content-Type': 'application/json' });
+    res.end(JSON.stringify({ error: 'Not found' }));
 });
-
-function escapeHtml(text) {
-    if (!text) return '';
-    return text
-        .replace(/&/g, '&amp;')
-        .replace(/</g, '&lt;')
-        .replace(/>/g, '&gt;')
-        .replace(/"/g, '&quot;')
-        .replace(/'/g, '&#39;');
-}
 
 server.listen(config.port, '0.0.0.0', () => {
     console.log(`🚀 Сервер запущен на порту ${config.port}`);
-    console.log(`   База данных PostgreSQL`);
+    console.log(`   📝 React API: http://localhost:${config.port}/save`);
+    console.log(`   📋 Данные анкет: http://localhost:${config.port}/view`);
+    console.log(`   💾 Cookies активны`);
 });
