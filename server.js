@@ -1,4 +1,3 @@
-// server.js
 import http from 'http';
 import url from 'url';
 import pg from 'pg';
@@ -6,8 +5,6 @@ import cookie from 'cookie';
 import crypto from 'crypto';
 
 const { Pool } = pg;
-
-// ========== ВСПОМОГАТЕЛЬНЫЕ ФУНКЦИИ ==========
 
 function safeCookieValue(data) {
     return Buffer.from(JSON.stringify(data)).toString('base64');
@@ -21,7 +18,6 @@ function unsafeCookieValue(cookieStr) {
     }
 }
 
-// Генерация случайного логина и пароля
 function generateCredentials() {
     const login = `user_${Date.now()}_${Math.random().toString(36).substring(2, 8)}`;
     const password = Math.random().toString(36).slice(-8);
@@ -29,7 +25,6 @@ function generateCredentials() {
     return { login, password, passwordHash };
 }
 
-// Валидация формы
 function validateForm(data) {
     const errors = {};
     
@@ -72,7 +67,6 @@ function validateForm(data) {
     return errors;
 }
 
-// ========== КОНФИГУРАЦИЯ ==========
 const config = {
     port: process.env.PORT || 3000,
     db: {
@@ -86,13 +80,11 @@ const pool = new Pool({
     ssl: { rejectUnauthorized: false }
 });
 
-// ========== МИГРАЦИЯ БД ==========
 async function setupDatabase() {
     let client;
     try {
         client = await pool.connect();
         
-        // Основная таблица
         await client.query(`
             CREATE TABLE IF NOT EXISTS form_submissions (
                 id SERIAL PRIMARY KEY,
@@ -110,8 +102,7 @@ async function setupDatabase() {
                 can_edit BOOLEAN DEFAULT FALSE
             )
         `);
-        
-        // Добавляем колонки, если их нет
+
         await client.query(`
             DO $$ 
             BEGIN
@@ -142,7 +133,6 @@ async function setupDatabase() {
 
 setupDatabase();
 
-// ========== СОЗДАНИЕ СЕРВЕРА ==========
 const server = http.createServer(async (req, res) => {
     const cookies = cookie.parse(req.headers.cookie || '');
     
@@ -158,16 +148,31 @@ const server = http.createServer(async (req, res) => {
     }
     
     const parsedUrl = url.parse(req.url || '', true);
-    
-    // ========== GET /get-saved-data ==========
+
+    // Добавьте этот блок кода в server.js (только для очистки!)
+    if (parsedUrl.pathname === '/clear-db' && req.method === 'POST') {
+        let client;
+        try {
+            client = await pool.connect();
+            await client.query('TRUNCATE TABLE form_submissions RESTART IDENTITY;');
+            res.writeHead(200, { 'Content-Type': 'application/json' });
+            res.end(JSON.stringify({ success: true, message: 'Database cleared!' }));
+        } catch (error) {
+            res.writeHead(500, { 'Content-Type': 'application/json' });
+            res.end(JSON.stringify({ error: error.message }));
+        } finally {
+            if (client) client.release();
+        }
+        return;
+    }
+
     if (parsedUrl.pathname === '/get-saved-data' && req.method === 'GET') {
         const savedData = cookies.saved_data ? unsafeCookieValue(cookies.saved_data) : {};
         res.writeHead(200, { 'Content-Type': 'application/json' });
         res.end(JSON.stringify(savedData));
         return;
     }
-    
-    // ========== POST /save ==========
+
     if (parsedUrl.pathname === '/save' && req.method === 'POST') {
         let body = '';
         
@@ -194,7 +199,6 @@ const server = http.createServer(async (req, res) => {
                 
                 console.log('📨 Получены данные:', formData.full_name, formData.email);
                 
-                // Валидация
                 const errors = validateForm(formData);
                 if (Object.keys(errors).length > 0) {
                     res.writeHead(400, { 'Content-Type': 'application/json' });
@@ -205,8 +209,7 @@ const server = http.createServer(async (req, res) => {
                 client = await pool.connect();
                 
                 const languagesStr = Array.isArray(formData.languages) ? formData.languages.join(',') : '';
-                
-                // Генерируем логин и пароль
+
                 const { login, password, passwordHash } = generateCredentials();
                 
                 const result = await client.query(`
@@ -255,8 +258,7 @@ const server = http.createServer(async (req, res) => {
         });
         return;
     }
-    
-    // ========== POST /login ==========
+
     if (parsedUrl.pathname === '/login' && req.method === 'POST') {
         let body = '';
         
@@ -311,8 +313,7 @@ const server = http.createServer(async (req, res) => {
         });
         return;
     }
-    
-    // ========== GET /check-session ==========
+
     if (parsedUrl.pathname === '/check-session' && req.method === 'GET') {
         const session = cookies.session;
         const userId = cookies.user_id;
@@ -328,7 +329,6 @@ const server = http.createServer(async (req, res) => {
         return;
     }
     
-    // ========== GET /edit/:id ==========
     if (parsedUrl.pathname.startsWith('/edit/') && req.method === 'GET') {
         const session = cookies.session;
         const userId = cookies.user_id;
@@ -366,8 +366,7 @@ const server = http.createServer(async (req, res) => {
         }
         return;
     }
-    
-    // ========== POST /edit/:id ==========
+
     if (parsedUrl.pathname.startsWith('/edit/') && req.method === 'POST') {
         const session = cookies.session;
         const userId = cookies.user_id;
@@ -420,7 +419,6 @@ const server = http.createServer(async (req, res) => {
         return;
     }
     
-    // ========== GET /logout ==========
     if (parsedUrl.pathname === '/logout' && req.method === 'GET') {
         res.setHeader('Set-Cookie', [
             'session=; Max-Age=0; Path=/',
@@ -430,8 +428,7 @@ const server = http.createServer(async (req, res) => {
         res.end(JSON.stringify({ success: true, message: 'Выход выполнен' }));
         return;
     }
-    
-    // ========== GET /view ==========
+
     if (parsedUrl.pathname === '/view' && req.method === 'GET') {
         let client;
         try {
@@ -452,8 +449,7 @@ const server = http.createServer(async (req, res) => {
         }
         return;
     }
-    
-    // ========== GET /health ==========
+
     if (parsedUrl.pathname === '/health' && req.method === 'GET') {
         res.writeHead(200, { 'Content-Type': 'application/json' });
         res.end(JSON.stringify({ status: 'ok' }));
