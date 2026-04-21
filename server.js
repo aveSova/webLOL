@@ -149,7 +149,6 @@ const server = http.createServer(async (req, res) => {
     
     const parsedUrl = url.parse(req.url || '', true);
 
-    // Добавьте этот блок кода в server.js (только для очистки!)
     if (parsedUrl.pathname === '/clear-db' && req.method === 'POST') {
         let client;
         try {
