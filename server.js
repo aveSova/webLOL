@@ -328,11 +328,15 @@ const server = http.createServer(async (req, res) => {
                 if (!res.headersSent) {
                     res.writeHead(500, { 'Content-Type': 'application/json' });
                     res.end(JSON.stringify({ success: false, message: error.message }));
-                } else {
-                    console.error('❌ Невозможно отправить ошибку — заголовки уже отправлены');
                 }
             } finally {
-                if (client) client.release();
+                if (client) {
+                    try {
+                        client.release();
+                    } catch (err) {
+                        console.error('❌ Ошибка при release():', err.message);
+                    }
+                }
             }
         });
         return;
