@@ -72,13 +72,19 @@ const config = {
     db: {
         connectionString: process.env.DATABASE_URL,
     },
-    frontendUrl: process.env.FRONTEND_URL || 'http://u82303.kubsu-dev.ru'
+    frontendUrl: process.env.FRONTEND_URL || 'https://u82303.kubsu-dev.ru'
 };
 
 const pool = new Pool({
     connectionString: config.db.connectionString,
     ssl: { rejectUnauthorized: false }
 });
+
+console.log('🔍 DATABASE_URL used:', process.env.DATABASE_URL ? '✅ exists' : '❌ MISSING');
+if (process.env.DATABASE_URL) {
+    // Выводим первые 50 символов для проверки (не весь URL, чтобы не засветить пароль)
+    console.log('📡 Connection string starts with:', process.env.DATABASE_URL.substring(0, 50));
+}
 
 async function setupDatabase() {
     let client;
