@@ -72,7 +72,7 @@ const config = {
     db: {
         connectionString: process.env.DATABASE_URL,
     },
-    frontendUrl: process.env.FRONTEND_URL || 'https://u82303.kubsu-dev.ru'
+    frontendUrl: process.env.FRONTEND_URL || 'http://u82303.kubsu-dev.ru'
 };
 
 const pool = new Pool({
@@ -101,7 +101,6 @@ async function setupDatabase() {
                 gender VARCHAR(20),
                 programming_languages TEXT,
                 biography TEXT,
-                contract_accepted INTEGER DEFAULT 0,
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                 login VARCHAR(100) UNIQUE,
                 password_hash VARCHAR(255),
@@ -148,6 +147,7 @@ const server = http.createServer(async (req, res) => {
     res.setHeader('Access-Control-Allow-Credentials', 'true');
     
     if (req.method === 'OPTIONS') {
+        console.log("✅✅✅✅✅✅✅✅✅✅✅✅✅✅✅✅✅✅✅✅✅✅✅✅✅✅✅✅✅✅✅✅✅✅✅✅✅✅✅✅✅✅✅✅");
         res.writeHead(204);
         res.end();
         return;
@@ -474,9 +474,6 @@ const server = http.createServer(async (req, res) => {
         return;
     }
     
-    res.writeHead(404, { 'Content-Type': 'application/json' });
-    res.end(JSON.stringify({ error: 'Not found' }));
-
     if (parsedUrl.pathname.startsWith('/admin/users') && req.method === 'GET') {
 
         if (cookies.is_admin !== 'true') {
@@ -542,6 +539,9 @@ const server = http.createServer(async (req, res) => {
         }
         return;
     }
+
+    res.writeHead(404, { 'Content-Type': 'application/json' });
+    res.end(JSON.stringify({ error: 'Not found' }));
 });
 
 server.listen(config.port, '0.0.0.0', () => {
