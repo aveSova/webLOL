@@ -537,15 +537,6 @@ const server = http.createServer(async (req, res) => {
         }
         return;
     }
-
-    if (parsedUrl.pathname.startsWith('/admin') && req.method === 'GET') {
-
-        if (cookies.is_admin !== 'true') {
-            res.writeHead(403);
-            res.end(JSON.stringify({ error: 'Forbidden' }));
-            return;
-        }
-    }
 });
 
 server.listen(config.port, '0.0.0.0', () => {
