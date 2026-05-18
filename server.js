@@ -329,7 +329,7 @@ const server = http.createServer(async (req, res) => {
                     res.writeHead(500, { 'Content-Type': 'application/json' });
                     res.end(JSON.stringify({ success: false, message: error.message }));
                 }
-            } finally {
+            } /*finally {
                 if (client) {
                     try {
                         client.release();
@@ -337,7 +337,7 @@ const server = http.createServer(async (req, res) => {
                         console.error('❌ Ошибка при release():', err.message);
                     }
                 }
-            }
+            }*/
         });
         return;
     }
