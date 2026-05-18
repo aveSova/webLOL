@@ -472,15 +472,6 @@ const server = http.createServer(async (req, res) => {
     res.writeHead(404, { 'Content-Type': 'application/json' });
     res.end(JSON.stringify({ error: 'Not found' }));
 
-    if (parsedUrl.pathname.startsWith('/admin') && req.method === 'GET') {
-
-        if (cookies.is_admin !== 'true') {
-            res.writeHead(403);
-            res.end(JSON.stringify({ error: 'Forbidden' }));
-            return;
-        }
-    }
-
     if (parsedUrl.pathname.startsWith('/admin/users') && req.method === 'GET') {
 
         if (cookies.is_admin !== 'true') {
@@ -528,7 +519,7 @@ const server = http.createServer(async (req, res) => {
         let client;
         try {
             client = await pool.connect();
-            let result = client.query('DELETE * FROM form_submission WHERE id = $1 RETURNING id', [id]);
+            let result = await client.query('DELETE FROM form_submissions WHERE id = $1 RETURNING id', [id]);
             if (result.rowCount === 0){
                 res.writeHead(404, { 'Content-Type': 'application/json' });
                 res.end(JSON.stringify({ error: 'User not found' }));
@@ -545,6 +536,15 @@ const server = http.createServer(async (req, res) => {
             if (client) client.release();
         }
         return;
+    }
+
+    if (parsedUrl.pathname.startsWith('/admin') && req.method === 'GET') {
+
+        if (cookies.is_admin !== 'true') {
+            res.writeHead(403);
+            res.end(JSON.stringify({ error: 'Forbidden' }));
+            return;
+        }
     }
 });
 
