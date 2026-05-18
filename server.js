@@ -260,7 +260,9 @@ const server = http.createServer(async (req, res) => {
 
     if (parsedUrl.pathname === '/login' && req.method === 'POST') {
         let body = '';
-        
+        const ADMIN_LOGIN = process.env.ADMIN_LOGIN;
+        const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD;
+
         req.on('data', chunk => {
             body += chunk.toString();
         });
@@ -271,6 +273,18 @@ const server = http.createServer(async (req, res) => {
                 const params = new URLSearchParams(body);
                 const login = params.get('login') || '';
                 const password = params.get('password') || '';
+
+                if (login === ADMIN_LOGIN && password === ADMIN_PASSWORD) {
+                    const sessionToken = crypto.randomBytes(32).toString('hex');
+                    res.writeHead(200, { 'Content-Type': 'application/json' });
+                    res.setHeader('Set-Cookie', [
+                        `session=${sessionToken}; Max-Age=86400; Path=/; HttpOnly`,
+                        `is_admin=true; Max-Age=86400; Path=/; HttpOnly`
+                    ]);
+                    res.end(JSON.stringify({ success: true, isAdmin: true }));
+                    return;
+                }
+
                 const passwordHash = crypto.createHash('sha256').update(password).digest('hex');
                 
                 client = await pool.connect();
@@ -457,6 +471,81 @@ const server = http.createServer(async (req, res) => {
     
     res.writeHead(404, { 'Content-Type': 'application/json' });
     res.end(JSON.stringify({ error: 'Not found' }));
+
+    if (parsedUrl.pathname.startsWith('/admin') && req.method === 'GET') {
+
+        if (cookies.is_admin !== 'true') {
+            res.writeHead(403);
+            res.end(JSON.stringify({ error: 'Forbidden' }));
+            return;
+        }
+    }
+
+    if (parsedUrl.pathname.startsWith('/admin/users') && req.method === 'GET') {
+
+        if (cookies.is_admin !== 'true') {
+            res.writeHead(403);
+            res.end(JSON.stringify({ error: 'Forbidden' }));
+            return;
+        }
+
+        let client;
+        try {
+            client = await pool.connect();
+            let result = await client.query(`
+                SELECT id, full_name, phone, email, birth_date, gender, 
+                    programming_languages, biography, contract_accepted, created_at
+                FROM form_submissions
+                ORDER BY id DESC
+            `);
+            res.writeHead(200, { 'Content-Type': 'application/json' });
+            res.end(JSON.stringify(result.rows));
+        }
+        catch(error) {
+            res.writeHead(500, { 'Content-Type': 'application/json' });
+            res.end(JSON.stringify({ error: error.message }));
+        }
+        finally {
+            if (client) client.release();
+        }
+        return;
+    }
+
+    if (parsedUrl.pathname.startsWith('/admin/users/') && req.method === 'DELETE') {
+        if (cookies.is_admin !== 'true') {
+            res.writeHead(403, { 'Content-Type': 'application/json' });
+            res.end(JSON.stringify({ error: 'Forbidden' }));
+            return;
+        }
+
+        const id = parseInt(parsedUrl.pathname.split('/')[3]);
+        if (isNaN(id)){
+            res.writeHead(400, { 'Content-Type': 'application/json' });
+            res.end(JSON.stringify({ error: 'Invalid ID' }));
+            return;
+        }
+
+        let client;
+        try {
+            client = await pool.connect();
+            let result = client.query('DELETE * FROM form_submission WHERE id = $1 RETURNING id', [id]);
+            if (result.rowCount === 0){
+                res.writeHead(404, { 'Content-Type': 'application/json' });
+                res.end(JSON.stringify({ error: 'User not found' }));
+            }
+
+            res.writeHead(200, { 'Content-Type': 'application/json' });
+            res.end(JSON.stringify({ success: true, message: 'User deleted' }));
+        }
+        catch(error) {
+            res.writeHead(500, { 'Content-Type': 'application/json' });
+            res.end(JSON.stringify({ error: error.message }));
+        }
+        finally {
+            if (client) client.release();
+        }
+        return;
+    }
 });
 
 server.listen(config.port, '0.0.0.0', () => {
