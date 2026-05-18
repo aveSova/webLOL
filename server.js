@@ -525,6 +525,7 @@ const server = http.createServer(async (req, res) => {
             if (result.rowCount === 0){
                 res.writeHead(404, { 'Content-Type': 'application/json' });
                 res.end(JSON.stringify({ error: 'User not found' }));
+                return;
             }
 
             res.writeHead(200, { 'Content-Type': 'application/json' });
