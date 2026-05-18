@@ -323,9 +323,14 @@ const server = http.createServer(async (req, res) => {
                 return;
                 
             } catch (error) {
+                console.error('❌ Ошибка в catch. Ответ уже отправлен?', res.headersSent);
                 console.error('❌ Ошибка:', error.message);
-                res.writeHead(500, { 'Content-Type': 'application/json' });
-                res.end(JSON.stringify({ success: false, message: error.message }));
+                if (!res.headersSent) {
+                    res.writeHead(500, { 'Content-Type': 'application/json' });
+                    res.end(JSON.stringify({ success: false, message: error.message }));
+                } else {
+                    console.error('❌ Невозможно отправить ошибку — заголовки уже отправлены');
+                }
             } finally {
                 if (client) client.release();
             }
