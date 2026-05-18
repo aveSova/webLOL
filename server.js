@@ -320,6 +320,7 @@ const server = http.createServer(async (req, res) => {
                     userId: user.id,
                     fullName: user.full_name
                 }));
+                return;
                 
             } catch (error) {
                 console.error('❌ Ошибка:', error.message);
