@@ -143,7 +143,7 @@ const server = http.createServer(async (req, res) => {
     const cookies = cookie.parse(req.headers.cookie || '');
     
     res.setHeader('Access-Control-Allow-Origin', config.frontendUrl);
-    res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
+    res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS, DELETE');
     res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
     res.setHeader('Access-Control-Allow-Credentials', 'true');
     
@@ -219,8 +219,8 @@ const server = http.createServer(async (req, res) => {
                 
                 const result = await client.query(`
                     INSERT INTO form_submissions 
-                    (full_name, phone, email, birth_date, gender, programming_languages, biography, contract_accepted, login, password_hash, can_edit)
-                    VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
+                    (full_name, phone, email, birth_date, gender, programming_languages, biography, login, password_hash, can_edit)
+                    VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
                     RETURNING id
                 `, [
                     formData.full_name,
@@ -230,7 +230,6 @@ const server = http.createServer(async (req, res) => {
                     formData.gender,
                     languagesStr,
                     formData.biography,
-                    formData.contract_accepted === '1' ? 1 : 0,
                     login,
                     passwordHash,
                     false
