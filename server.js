@@ -329,15 +329,9 @@ const server = http.createServer(async (req, res) => {
                     res.writeHead(500, { 'Content-Type': 'application/json' });
                     res.end(JSON.stringify({ success: false, message: error.message }));
                 }
-            } /*finally {
-                if (client) {
-                    try {
-                        client.release();
-                    } catch (err) {
-                        console.error('❌ Ошибка при release():', err.message);
-                    }
-                }
-            }*/
+            } finally {
+                if (client) client.release();
+            }
         });
         return;
     }
