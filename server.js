@@ -286,6 +286,7 @@ const server = http.createServer(async (req, res) => {
                         `session=${sessionToken}; Max-Age=86400; Path=/; HttpOnly`,
                         `is_admin=true; Max-Age=86400; Path=/; HttpOnly`
                     ]);
+                    console.warn("ADMIN IS HERE");
                     res.writeHead(200, { 'Content-Type': 'application/json' });
                     res.end(JSON.stringify({ success: true, isAdmin: true }));
                     return;
