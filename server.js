@@ -354,6 +354,13 @@ const server = http.createServer(async (req, res) => {
     }
     
     if (parsedUrl.pathname.startsWith('/edit/') && req.method === 'GET') {
+
+        if (cookies.isAdmin) {
+            res.writeHead(200, { 'Content-Type': 'application/json' });
+            res.end(JSON.stringify({ success: true, isAdmin: true }));
+            return;
+        }
+
         const session = cookies.session;
         const userId = cookies.user_id;
         const editId = parseInt(parsedUrl.pathname.split('/')[2]);
