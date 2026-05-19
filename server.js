@@ -25,6 +25,9 @@ function generateCredentials() {
     return { login, password, passwordHash };
 }
 
+const ADMIN_LOGIN = process.env.ADMIN_LOGIN;
+const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD;
+
 function validateForm(data) {
     const errors = {};
     
@@ -265,8 +268,6 @@ const server = http.createServer(async (req, res) => {
 
     if (parsedUrl.pathname === '/login' && req.method === 'POST') {
         let body = '';
-        const ADMIN_LOGIN = process.env.ADMIN_LOGIN;
-        const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD;
 
         req.on('data', chunk => {
             body += chunk.toString();
