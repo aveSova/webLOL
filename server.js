@@ -353,45 +353,6 @@ const server = http.createServer(async (req, res) => {
         return;
     }
     
-    if (parsedUrl.pathname.startsWith('/edit/') && req.method === 'GET') {
-
-        const session = cookies.session;
-        const userId = cookies.user_id;
-        const editId = parseInt(parsedUrl.pathname.split('/')[2]);
-        
-        if (!session || !userId || parseInt(userId) !== editId) {
-            res.writeHead(401, { 'Content-Type': 'application/json' });
-            res.end(JSON.stringify({ success: false, message: 'Не авторизован' }));
-            return;
-        }
-        
-        let client;
-        try {
-            client = await pool.connect();
-            
-            const result = await client.query(`
-                SELECT id, full_name, phone, email, birth_date, gender, programming_languages, biography, contract_accepted
-                FROM form_submissions WHERE id = $1
-            `, [editId]);
-            
-            if (result.rows.length === 0) {
-                res.writeHead(404, { 'Content-Type': 'application/json' });
-                res.end(JSON.stringify({ success: false, message: 'Анкета не найдена' }));
-                return;
-            }
-            
-            res.writeHead(200, { 'Content-Type': 'application/json' });
-            res.end(JSON.stringify({ success: true, data: result.rows[0] }));
-            
-        } catch (error) {
-            res.writeHead(500, { 'Content-Type': 'application/json' });
-            res.end(JSON.stringify({ success: false, message: error.message }));
-        } finally {
-            if (client) client.release();
-        }
-        return;
-    }
-
     if (parsedUrl.pathname.startsWith('/admin/users') && req.method === 'GET') {
 
         if (cookies.is_admin !== 'true') {
@@ -454,6 +415,45 @@ const server = http.createServer(async (req, res) => {
             res.end(JSON.stringify({ error: error.message }));
         }
         finally {
+            if (client) client.release();
+        }
+        return;
+    }
+
+    if (parsedUrl.pathname.startsWith('/edit/') && req.method === 'GET') {
+
+        const session = cookies.session;
+        const userId = cookies.user_id;
+        const editId = parseInt(parsedUrl.pathname.split('/')[2]);
+        
+        if (!session || !userId || parseInt(userId) !== editId) {
+            res.writeHead(401, { 'Content-Type': 'application/json' });
+            res.end(JSON.stringify({ success: false, message: 'Не авторизован' }));
+            return;
+        }
+        
+        let client;
+        try {
+            client = await pool.connect();
+            
+            const result = await client.query(`
+                SELECT id, full_name, phone, email, birth_date, gender, programming_languages, biography, contract_accepted
+                FROM form_submissions WHERE id = $1
+            `, [editId]);
+            
+            if (result.rows.length === 0) {
+                res.writeHead(404, { 'Content-Type': 'application/json' });
+                res.end(JSON.stringify({ success: false, message: 'Анкета не найдена' }));
+                return;
+            }
+            
+            res.writeHead(200, { 'Content-Type': 'application/json' });
+            res.end(JSON.stringify({ success: true, data: result.rows[0] }));
+            
+        } catch (error) {
+            res.writeHead(500, { 'Content-Type': 'application/json' });
+            res.end(JSON.stringify({ success: false, message: error.message }));
+        } finally {
             if (client) client.release();
         }
         return;
