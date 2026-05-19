@@ -355,12 +355,6 @@ const server = http.createServer(async (req, res) => {
     
     if (parsedUrl.pathname.startsWith('/edit/') && req.method === 'GET') {
 
-        if (cookies.isAdmin) {
-            res.writeHead(200, { 'Content-Type': 'application/json' });
-            res.end(JSON.stringify({ success: true, isAdmin: true }));
-            return;
-        }
-
         const session = cookies.session;
         const userId = cookies.user_id;
         const editId = parseInt(parsedUrl.pathname.split('/')[2]);
@@ -393,6 +387,73 @@ const server = http.createServer(async (req, res) => {
             res.writeHead(500, { 'Content-Type': 'application/json' });
             res.end(JSON.stringify({ success: false, message: error.message }));
         } finally {
+            if (client) client.release();
+        }
+        return;
+    }
+
+    if (parsedUrl.pathname.startsWith('/admin/users') && req.method === 'GET') {
+
+        if (cookies.is_admin !== 'true') {
+            res.writeHead(403);
+            res.end(JSON.stringify({ error: 'Forbidden' }));
+            return;
+        }
+
+        let client;
+        try {
+            client = await pool.connect();
+            let result = await client.query(`
+                SELECT id, full_name, phone, email, birth_date, gender, 
+                    programming_languages, biography, contract_accepted, created_at
+                FROM form_submissions
+                ORDER BY id DESC
+            `);
+            res.writeHead(200, { 'Content-Type': 'application/json' });
+            res.end(JSON.stringify(result.rows));
+        }
+        catch(error) {
+            res.writeHead(500, { 'Content-Type': 'application/json' });
+            res.end(JSON.stringify({ error: error.message }));
+        }
+        finally {
+            if (client) client.release();
+        }
+        return;
+    }
+
+    if (parsedUrl.pathname.startsWith('/admin/users/') && req.method === 'DELETE') {
+        if (cookies.is_admin !== 'true') {
+            res.writeHead(403, { 'Content-Type': 'application/json' });
+            res.end(JSON.stringify({ error: 'Forbidden' }));
+            return;
+        }
+
+        const id = parseInt(parsedUrl.pathname.split('/')[3]);
+        if (isNaN(id)){
+            res.writeHead(400, { 'Content-Type': 'application/json' });
+            res.end(JSON.stringify({ error: 'Invalid ID' }));
+            return;
+        }
+
+        let client;
+        try {
+            client = await pool.connect();
+            let result = await client.query('DELETE FROM form_submissions WHERE id = $1 RETURNING id', [id]);
+            if (result.rowCount === 0){
+                res.writeHead(404, { 'Content-Type': 'application/json' });
+                res.end(JSON.stringify({ error: 'User not found' }));
+                return;
+            }
+
+            res.writeHead(200, { 'Content-Type': 'application/json' });
+            res.end(JSON.stringify({ success: true, message: 'User deleted' }));
+        }
+        catch(error) {
+            res.writeHead(500, { 'Content-Type': 'application/json' });
+            res.end(JSON.stringify({ error: error.message }));
+        }
+        finally {
             if (client) client.release();
         }
         return;
@@ -487,72 +548,7 @@ const server = http.createServer(async (req, res) => {
         return;
     }
     
-    if (parsedUrl.pathname.startsWith('/admin/users') && req.method === 'GET') {
-
-        if (cookies.is_admin !== 'true') {
-            res.writeHead(403);
-            res.end(JSON.stringify({ error: 'Forbidden' }));
-            return;
-        }
-
-        let client;
-        try {
-            client = await pool.connect();
-            let result = await client.query(`
-                SELECT id, full_name, phone, email, birth_date, gender, 
-                    programming_languages, biography, contract_accepted, created_at
-                FROM form_submissions
-                ORDER BY id DESC
-            `);
-            res.writeHead(200, { 'Content-Type': 'application/json' });
-            res.end(JSON.stringify(result.rows));
-        }
-        catch(error) {
-            res.writeHead(500, { 'Content-Type': 'application/json' });
-            res.end(JSON.stringify({ error: error.message }));
-        }
-        finally {
-            if (client) client.release();
-        }
-        return;
-    }
-
-    if (parsedUrl.pathname.startsWith('/admin/users/') && req.method === 'DELETE') {
-        if (cookies.is_admin !== 'true') {
-            res.writeHead(403, { 'Content-Type': 'application/json' });
-            res.end(JSON.stringify({ error: 'Forbidden' }));
-            return;
-        }
-
-        const id = parseInt(parsedUrl.pathname.split('/')[3]);
-        if (isNaN(id)){
-            res.writeHead(400, { 'Content-Type': 'application/json' });
-            res.end(JSON.stringify({ error: 'Invalid ID' }));
-            return;
-        }
-
-        let client;
-        try {
-            client = await pool.connect();
-            let result = await client.query('DELETE FROM form_submissions WHERE id = $1 RETURNING id', [id]);
-            if (result.rowCount === 0){
-                res.writeHead(404, { 'Content-Type': 'application/json' });
-                res.end(JSON.stringify({ error: 'User not found' }));
-                return;
-            }
-
-            res.writeHead(200, { 'Content-Type': 'application/json' });
-            res.end(JSON.stringify({ success: true, message: 'User deleted' }));
-        }
-        catch(error) {
-            res.writeHead(500, { 'Content-Type': 'application/json' });
-            res.end(JSON.stringify({ error: error.message }));
-        }
-        finally {
-            if (client) client.release();
-        }
-        return;
-    }
+    
 
     res.writeHead(404, { 'Content-Type': 'application/json' });
     res.end(JSON.stringify({ error: 'Not found' }));
