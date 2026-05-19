@@ -281,11 +281,11 @@ const server = http.createServer(async (req, res) => {
 
                 if (login === ADMIN_LOGIN && password === ADMIN_PASSWORD) {
                     const sessionToken = crypto.randomBytes(32).toString('hex');
-                    res.writeHead(200, { 'Content-Type': 'application/json' });
                     res.setHeader('Set-Cookie', [
                         `session=${sessionToken}; Max-Age=86400; Path=/; HttpOnly`,
                         `is_admin=true; Max-Age=86400; Path=/; HttpOnly`
                     ]);
+                    res.writeHead(200, { 'Content-Type': 'application/json' });
                     res.end(JSON.stringify({ success: true, isAdmin: true }));
                     return;
                 }
