@@ -283,8 +283,8 @@ const server = http.createServer(async (req, res) => {
                 if (login === ADMIN_LOGIN && password === ADMIN_PASSWORD) {
                     const sessionToken = crypto.randomBytes(32).toString('hex');
                     res.setHeader('Set-Cookie', [
-                        `session=${sessionToken}; Max-Age=86400; Path=/; HttpOnly`,
-                        `is_admin=true; Max-Age=86400; Path=/; HttpOnly`
+                        `session=${sessionToken}; Max-Age=86400; Path=/; HttpOnly; SameSite=None; Secure`,
+                        `is_admin=true; Max-Age=86400; Path=/; HttpOnly; SameSite=None; Secure`
                     ]);
                     console.warn("ADMIN IS HERE");
                     res.writeHead(200, { 'Content-Type': 'application/json' });
