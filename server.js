@@ -308,14 +308,7 @@ const server = http.createServer(async (req, res) => {
 
     if (parsedUrl.pathname === '/login' && req.method === 'POST') {
 
-        const csrfToken = req.headers['x-xsrf-token'];
-        const clientIp = req.socket.remoteAddress;
-        const expectedToken = csrfTokens.get(clientIp);
-        if (!csrfToken || csrfToken !== expectedToken) {
-            res.writeHead(403);
-            res.end(JSON.stringify({ error: 'CSRF token missing or invalid' }));
-            return;
-        }
+
 
         let body = '';
 
