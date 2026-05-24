@@ -6,6 +6,16 @@ import crypto from 'crypto';
 
 const { Pool } = pg;
 
+function escapeHtml(text) {
+    if (!text) return '';
+    return text
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#39;');
+}
+
 function safeCookieValue(data) {
     return Buffer.from(JSON.stringify(data)).toString('base64');
 }
@@ -83,12 +93,6 @@ const pool = new Pool({
     ssl: { rejectUnauthorized: false }
 });
 
-console.log('🔍 DATABASE_URL used:', process.env.DATABASE_URL ? '✅ exists' : '❌ MISSING');
-if (process.env.DATABASE_URL) {
-    // Выводим первые 50 символов для проверки (не весь URL, чтобы не засветить пароль)
-    console.log('📡 Connection string starts with:', process.env.DATABASE_URL.substring(0, 50));
-}
-
 async function setupDatabase() {
     let client;
     try {
@@ -141,6 +145,9 @@ async function setupDatabase() {
 
 setupDatabase();
 
+const csrfTokens = new Map();
+
+
 const server = http.createServer(async (req, res) => {
     const cookies = cookie.parse(req.headers.cookie || '');
     
@@ -158,7 +165,29 @@ const server = http.createServer(async (req, res) => {
     
     const parsedUrl = url.parse(req.url || '', true);
 
+    if (parsedUrl.pathname === '/api/csrf-token' && req.method === 'GET') {
+        const clientIp = req.socket.remoteAddress;
+        let csrfToken = csrfTokens.get(clientIp);
+        if (!csrfToken) {
+            csrfToken = crypto.randomBytes(32).toString('hex');
+            csrfTokens.set(clientIp, csrfToken);
+        }
+        res.writeHead(200, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ csrfToken }));
+        return;
+    }
+
     if (parsedUrl.pathname === '/clear-db' && req.method === 'POST') {
+        
+        const csrfToken = req.headers['x-xsrf-token'];
+        const clientIp = req.socket.remoteAddress;
+        const expectedToken = csrfTokens.get(clientIp);
+
+        if (!csrfToken || csrfToken !== expectedToken) {
+            res.writeHead(403);
+            res.end(JSON.stringify({ error: 'CSRF token missing or invalid' }));
+            return;
+        }
         let client;
         try {
             client = await pool.connect();
@@ -166,8 +195,9 @@ const server = http.createServer(async (req, res) => {
             res.writeHead(200, { 'Content-Type': 'application/json' });
             res.end(JSON.stringify({ success: true, message: 'Database cleared!' }));
         } catch (error) {
-            res.writeHead(500, { 'Content-Type': 'application/json' });
-            res.end(JSON.stringify({ error: error.message }));
+            console.error('❌ Ошибка в cleardb|post: ', error.message);
+            res.writeHead(500);
+            res.end(JSON.stringify({ error: 'Внутренняя ошибка сервера' }));
         } finally {
             if (client) client.release();
         }
@@ -182,6 +212,16 @@ const server = http.createServer(async (req, res) => {
     }
 
     if (parsedUrl.pathname === '/save' && req.method === 'POST') {
+
+        const csrfToken = req.headers['x-xsrf-token'];
+        const clientIp = req.socket.remoteAddress;
+        const expectedToken = csrfTokens.get(clientIp);
+        if (!csrfToken || csrfToken !== expectedToken) {
+            res.writeHead(403);
+            res.end(JSON.stringify({ error: 'CSRF token missing or invalid' }));
+            return;
+        }
+
         let body = '';
         
         req.on('data', chunk => {
@@ -256,9 +296,9 @@ const server = http.createServer(async (req, res) => {
                 }));
                 
             } catch (error) {
-                console.error('❌ Ошибка:', error.message);
-                res.writeHead(500, { 'Content-Type': 'application/json' });
-                res.end(JSON.stringify({ success: false, message: error.message }));
+                console.error('❌ Ошибка в save|post: ', error.message);
+                res.writeHead(500);
+                res.end(JSON.stringify({ error: 'Внутренняя ошибка сервера' }));
             } finally {
                 if (client) client.release();
             }
@@ -267,6 +307,16 @@ const server = http.createServer(async (req, res) => {
     }
 
     if (parsedUrl.pathname === '/login' && req.method === 'POST') {
+
+        const csrfToken = req.headers['x-xsrf-token'];
+        const clientIp = req.socket.remoteAddress;
+        const expectedToken = csrfTokens.get(clientIp);
+        if (!csrfToken || csrfToken !== expectedToken) {
+            res.writeHead(403);
+            res.end(JSON.stringify({ error: 'CSRF token missing or invalid' }));
+            return;
+        }
+
         let body = '';
 
         req.on('data', chunk => {
@@ -325,13 +375,9 @@ const server = http.createServer(async (req, res) => {
                 return;
                 
             } catch (error) {
-                console.error('❌ Ошибка в catch. Ответ уже отправлен?', res.headersSent);
-                console.error('❌ Ошибка:', error.message);
-                if (!res.headersSent) {
-                    res.writeHead(500, { 'Content-Type': 'application/json' });
-                    res.end(JSON.stringify({ success: false, message: error.message }));
-                    return;
-                }
+                console.error('❌ Ошибка в login|post: ', error.message);
+                res.writeHead(500);
+                res.end(JSON.stringify({ error: 'Внутренняя ошибка сервера' }));
             } finally {
                 if (client) client.release();
             }
@@ -375,8 +421,9 @@ const server = http.createServer(async (req, res) => {
             res.end(JSON.stringify(result.rows));
         }
         catch(error) {
-            res.writeHead(500, { 'Content-Type': 'application/json' });
-            res.end(JSON.stringify({ error: error.message }));
+            console.error('❌ Ошибка в admin|get: ', error.message);
+            res.writeHead(500);
+            res.end(JSON.stringify({ error: 'Внутренняя ошибка сервера' }));
         }
         finally {
             if (client) client.release();
@@ -385,6 +432,16 @@ const server = http.createServer(async (req, res) => {
     }
 
     if (parsedUrl.pathname.startsWith('/admin/users/') && req.method === 'DELETE') {
+        
+        const csrfToken = req.headers['x-xsrf-token'];
+        const clientIp = req.socket.remoteAddress;
+        const expectedToken = csrfTokens.get(clientIp);
+        if (!csrfToken || csrfToken !== expectedToken) {
+            res.writeHead(403);
+            res.end(JSON.stringify({ error: 'CSRF token missing or invalid' }));
+            return;
+        }
+        
         if (cookies.is_admin !== 'true') {
             res.writeHead(403, { 'Content-Type': 'application/json' });
             res.end(JSON.stringify({ error: 'Forbidden' }));
@@ -412,8 +469,9 @@ const server = http.createServer(async (req, res) => {
             res.end(JSON.stringify({ success: true, message: 'User deleted' }));
         }
         catch(error) {
-            res.writeHead(500, { 'Content-Type': 'application/json' });
-            res.end(JSON.stringify({ error: error.message }));
+            console.error('❌ Ошибка в admin|delete: ', error.message);
+            res.writeHead(500);
+            res.end(JSON.stringify({ error: 'Внутренняя ошибка сервера' }));
         }
         finally {
             if (client) client.release();
@@ -452,8 +510,9 @@ const server = http.createServer(async (req, res) => {
             res.end(JSON.stringify({ success: true, data: result.rows[0] }));
             
         } catch (error) {
-            res.writeHead(500, { 'Content-Type': 'application/json' });
-            res.end(JSON.stringify({ success: false, message: error.message }));
+            console.error('❌ Ошибка в edit|get: ', error.message);
+            res.writeHead(500);
+            res.end(JSON.stringify({ error: 'Внутренняя ошибка сервера' }));
         } finally {
             if (client) client.release();
         }
@@ -461,6 +520,16 @@ const server = http.createServer(async (req, res) => {
     }
 
     if (parsedUrl.pathname.startsWith('/edit/') && req.method === 'POST') {
+
+        const csrfToken = req.headers['x-xsrf-token'];
+        const clientIp = req.socket.remoteAddress;
+        const expectedToken = csrfTokens.get(clientIp);
+        if (!csrfToken || csrfToken !== expectedToken) {
+            res.writeHead(403);
+            res.end(JSON.stringify({ error: 'CSRF token missing or invalid' }));
+            return;
+        }
+
         const session = cookies.session;
         const userId = cookies.user_id;
         const editId = parseInt(parsedUrl.pathname.split('/')[2]);
@@ -503,8 +572,9 @@ const server = http.createServer(async (req, res) => {
                 res.end(JSON.stringify({ success: true, message: 'Данные обновлены!' }));
                 
             } catch (error) {
-                res.writeHead(500, { 'Content-Type': 'application/json' });
-                res.end(JSON.stringify({ success: false, message: error.message }));
+                console.error('❌ Ошибка в edit|post: ', error.message);
+                res.writeHead(500);
+                res.end(JSON.stringify({ error: 'Внутренняя ошибка сервера' }));
             } finally {
                 if (client) client.release();
             }
@@ -513,6 +583,16 @@ const server = http.createServer(async (req, res) => {
     }
     
     if (parsedUrl.pathname === '/logout' && req.method === 'GET') {
+
+        const csrfToken = req.headers['x-xsrf-token'];
+        const clientIp = req.socket.remoteAddress;
+        const expectedToken = csrfTokens.get(clientIp);
+        if (!csrfToken || csrfToken !== expectedToken) {
+            res.writeHead(403);
+            res.end(JSON.stringify({ error: 'CSRF token missing or invalid' }));
+            return;
+        }
+
         res.setHeader('Set-Cookie', [
             'session=; Max-Age=0; Path=/',
             'user_id=; Max-Age=0; Path=/'
@@ -535,8 +615,9 @@ const server = http.createServer(async (req, res) => {
             res.end(JSON.stringify(result.rows));
             
         } catch (error) {
-            res.writeHead(500, { 'Content-Type': 'application/json' });
-            res.end(JSON.stringify({ error: error.message }));
+            console.error('❌ Ошибка в view|get: ', error.message);
+            res.writeHead(500);
+            res.end(JSON.stringify({ error: 'Внутренняя ошибка сервера' }));
         } finally {
             if (client) client.release();
         }
@@ -548,8 +629,6 @@ const server = http.createServer(async (req, res) => {
         res.end(JSON.stringify({ status: 'ok' }));
         return;
     }
-    
-    
 
     res.writeHead(404, { 'Content-Type': 'application/json' });
     res.end(JSON.stringify({ error: 'Not found' }));
